@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database Destinasi Indonesia dengan gambar spesifik
+# DATABASE DESTINASI LENGKAP
 DESTINATIONS = [
     # ===== BANDUNG =====
     {
