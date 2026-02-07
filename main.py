@@ -1,13 +1,16 @@
 ﻿from fastapi import FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict
 import uvicorn
 
 app = FastAPI(title="Travel Recommendation AI")
 
+# FIX CORS - Izinkan semua origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Izinkan semua domain
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -275,20 +278,25 @@ CITY_MAPPING = {
     "malang": ["Malang", "Jawa Timur", "Batu", "Selecta"],
 }
 
-@app.get("/")
-def root():
-    return {"message": "Travel Recommendation API - Wisata Spesifik", "status": "running"}
-
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
-
-@app.get("/destinations")
-def get_destinations():
-    return {"success": True, "destinations": DESTINATIONS}
+@app.get("/search")
+def search_get(query: str = ""):
+    """GET endpoint for testing search"""
+    if not query:
+        return {"destinations": DESTINATIONS[:5]}
+    
+    results = []
+    query = query.lower()
+    
+    for dest in DESTINATIONS:
+        if query in dest.get("city", "").lower():
+            results.append(dest)
+        elif query in dest.get("name", "").lower():
+            results.append(dest)
+    
+    return {"success": True, "destinations": results[:10]}
 
 @app.post("/search")
-def search_destinations(request: Dict):
+async def search_destinations(request: dict):
     """Search destinations by city name"""
     try:
         query = request.get("query", "").lower().strip()
@@ -301,47 +309,25 @@ def search_destinations(request: Dict):
         
         results = []
         
-        # Cari berdasarkan mapping kota
-        if query in CITY_MAPPING:
-            search_terms = CITY_MAPPING[query]
-            for dest in DESTINATIONS:
-                # Cek kota
-                if dest.get("city", "").lower() == query:
-                    results.append(dest)
-                    continue
-                
-                # Cek berdasarkan search terms
-                for term in search_terms:
-                    if term.lower() in dest.get("city", "").lower() or \
-                       term.lower() in dest.get("name", "").lower() or \
-                       term.lower() in dest.get("province", "").lower():
-                        results.append(dest)
-                        break
+        # Search by city name
+        for dest in DESTINATIONS:
+            # Cek nama kota
+            if query in dest.get("city", "").lower():
+                results.append(dest)
+                continue
+            
+            # Cek nama destinasi
+            if query in dest.get("name", "").lower():
+                results.append(dest)
+                continue
+            
+            # Cek tags
+            tags = dest.get("tags", [])
+            if any(query in tag.lower() for tag in tags):
+                results.append(dest)
+                continue
         
-        # Jika tidak ditemukan via mapping, cari general
-        if not results:
-            for dest in DESTINATIONS:
-                # Cek nama destinasi
-                if query in dest["name"].lower():
-                    results.append(dest)
-                    continue
-                
-                # Cek kota
-                if query in dest.get("city", "").lower():
-                    results.append(dest)
-                    continue
-                
-                # Cek tags
-                if any(query in tag.lower() for tag in dest.get("tags", [])):
-                    results.append(dest)
-                    continue
-                
-                # Cek attractions
-                if any(query in attr.lower() for attr in dest.get("attractions", [])):
-                    results.append(dest)
-                    continue
-        
-        # Filter by region jika dipilih
+        # Filter by region
         if region != "all":
             results = [dest for dest in results if dest.get("region") == region]
         
@@ -353,10 +339,8 @@ def search_destinations(request: Dict):
                 seen_ids.add(dest["id"])
                 unique_results.append(dest)
         
-        # Sort by rating (descending)
+        # Sort by rating
         unique_results.sort(key=lambda x: x.get("rating", 0), reverse=True)
-        
-        print(f"✅ Found {len(unique_results)} destinations for '{query}'")
         
         return {
             "success": True,
@@ -366,9 +350,7 @@ def search_destinations(request: Dict):
         }
         
     except Exception as e:
-        print(f"❌ Search error: {str(e)}")
         return {"success": False, "error": str(e)}
-
 @app.post("/filter")
 def filter_by_region(request: Dict):
     """Filter destinations by region"""
